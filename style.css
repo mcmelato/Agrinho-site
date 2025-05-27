@@ -1,46 +1,52 @@
 body {
-    font-family: Arial, sans-serif;
-    margin: 0;
-    padding: 0;
-    background-color: #f7f7f7;
-    color: #333;
-  }
-  
-  header {
-    background-color: #228B22;
-    color: white;
-    padding: 1rem;
-    text-align: center;
-  }
-  
-  nav a {
-    margin: 0 10px;
-    color: white;
-    text-decoration: none;
-  }
-  
-  main {
-    padding: 2rem;
-  }
-  
-  .botao {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: #f4f4f4;
+  color: #333;
+}
+
+header {
+  background-color: green;
+  color: white;
+  padding: 1rem;
+  text-align: center;
+}
+
+.texto-1 {
     display: inline-block;
-    padding: 10px 20px;
-    background-color: #4CAF50;
-    color: white;
-    text-decoration: none;
-    border-radius: 8px;
-    transition: background-color 0.3s ease;
-  }
-  
-  .botao:hover {
-    background-color: #45a049;
-  }
-  
-  footer {
-    text-align: center;
-    background-color: #ddd;
-    padding: 1rem;
-    margin-top: 2rem;
-  }
-  
+    vertical-align: top;
+    width: 20%;
+    margin-right: 15%;
+}
+
+.imagem-texto-1{
+  width: 50%;
+}
+
+nav a {
+  color: white;
+  margin: 0 10px;
+  text-decoration: none;
+}
+
+.title{
+  text-align: center;
+}
+
+.texto-importante{
+  color: red;
+}
+
+main {
+  padding: 2rem;
+}
+
+footer {
+  background-color: #000;
+  color: #ffffff;
+  text-align: center;
+  padding: 0,5px;
+  width: 100%;
+  bottom: 0;
+}
