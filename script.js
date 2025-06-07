@@ -17,6 +17,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const contactForm = document.getElementById('contact-form');
     const loadingSpinner = document.getElementById('loading-spinner');
 
+    const skipLink = document.querySelector('.skip-link'); // Link "Pular para o conteúdo principal"
+    const mainContent = document.querySelector('main'); // Tag principal (assumindo id="main-content" no HTML)
+
+    // O botão 'explore a conexão' e sua funcionalidade foram removidos conforme solicitação.
+
     // --- Configurações Iniciais ---
     let currentFontSize = parseInt(localStorage.getItem('fontSize')) || 16; // Tamanho de fonte base em px
     const FONT_SIZE_STEP = 2; // Passo para aumentar/diminuir a fonte
@@ -97,6 +102,143 @@ document.addEventListener('DOMContentLoaded', () => {
         btnPararLeitura.disabled = true;
     };
 
+    /**
+     * Exibe um modal customizado com uma mensagem e um tipo (sucesso, erro, info).
+     * @param {string} message A mensagem a ser exibida no modal.
+     * @param {string} type O tipo de mensagem ('success', 'error', 'info').
+     * @param {number} [autoCloseDelay=0] Opcional. Atraso em milissegundos para fechar o modal automaticamente. 0 para não fechar automaticamente.
+     */
+    function displayModal(message, type = 'info', autoCloseDelay = 0) {
+        // Cria o modal se não existir
+        let modal = document.getElementById('custom-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'custom-modal';
+            modal.innerHTML = `
+                <i class="modal-icon fas"></i>
+                <p id="modal-message"></p>
+                <button aria-label="Fechar mensagem">Fechar</button>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        const modalMessage = document.getElementById('modal-message');
+        const modalIcon = modal.querySelector('.modal-icon');
+        const closeButton = modal.querySelector('button');
+
+        modalMessage.textContent = message;
+        modal.setAttribute('data-type', type); // Define o tipo para CSS
+
+        // Define o ícone com base no tipo
+        modalIcon.className = 'modal-icon fas'; // Reseta e adiciona classes base
+        if (type === 'success') {
+            modalIcon.classList.add('fa-check-circle');
+            modalIcon.setAttribute('aria-hidden', 'true'); // Oculta para leitores de tela se o texto já descreve
+        } else if (type === 'error') {
+            modalIcon.classList.add('fa-times-circle');
+            modalIcon.setAttribute('aria-hidden', 'true');
+        } else if (type === 'info') {
+            modalIcon.classList.add('fa-info-circle');
+            modalIcon.setAttribute('aria-hidden', 'true');
+        }
+
+        modal.style.opacity = '1';
+        modal.style.visibility = 'visible';
+        modal.setAttribute('aria-modal', 'true'); // Indica que é um modal
+        modal.setAttribute('role', 'dialog'); // Define o papel como diálogo
+        modal.setAttribute('aria-labelledby', 'modal-message'); // Associa ao título da mensagem
+
+        // Garante que o foco seja travado dentro do modal
+        const focusableElements = modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        const firstFocusableElement = focusableElements[0];
+        const lastFocusableElement = focusableElements[focusableElements.length - 1];
+
+        // Foca no botão de fechar por padrão
+        closeButton.focus();
+
+        function trapFocus(e) {
+            if (e.key === 'Tab') {
+                if (e.shiftKey) { // Se Shift + Tab
+                    if (document.activeElement === firstFocusableElement) {
+                        lastFocusableElement.focus();
+                        e.preventDefault();
+                    }
+                } else { // Se Tab
+                    if (document.activeElement === lastFocusableElement) {
+                        firstFocusableElement.focus();
+                        e.preventDefault();
+                    }
+                }
+            }
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        }
+
+        modal.addEventListener('keydown', trapFocus);
+
+        let autoCloseTimeout;
+        if (autoCloseDelay > 0) {
+            autoCloseTimeout = setTimeout(closeModal, autoCloseDelay);
+        }
+
+        function closeModal() {
+            modal.style.opacity = '0';
+            modal.style.visibility = 'hidden';
+            modal.removeAttribute('data-type');
+            modal.removeAttribute('aria-modal');
+            modal.removeAttribute('role');
+            modal.removeAttribute('aria-labelledby');
+            modal.removeEventListener('keydown', trapFocus); // Remove o event listener
+            // Remove o ícone ao fechar
+            if (modalIcon) {
+                modalIcon.className = 'modal-icon'; // Reseta as classes do ícone
+            }
+            if (autoCloseTimeout) {
+                clearTimeout(autoCloseTimeout); // Limpa o timeout de auto-fechamento se fechado manualmente
+            }
+        }
+
+        closeButton.addEventListener('click', closeModal);
+    }
+
+    /**
+     * Exibe uma mensagem de erro abaixo do campo do formulário.
+     * @param {HTMLElement} element O elemento de input/textarea ou legend para grupos de rádio.
+     * @param {string} message A mensagem de erro a ser exibida.
+     * @param {string} [errorId] Opcional. ID para a mensagem de erro (usado para quiz).
+     */
+    function showInlineError(element, message, errorId = `${element.id || 'form-field'}-error`) {
+        const errorMessageSpan = document.createElement('span');
+        errorMessageSpan.classList.add('error-message');
+        errorMessageSpan.textContent = message;
+        errorMessageSpan.id = errorId; // Define o ID para aria-describedby
+
+        // Para inputs de rádio, a mensagem de erro deve ir após o fieldset ou legend
+        if (element.type === 'radio' || element.tagName === 'LEGEND') {
+            const fieldset = element.closest('fieldset');
+            if (fieldset) {
+                // Verifica se uma mensagem de erro para este fieldset já existe
+                const existingError = fieldset.querySelector(`#${errorId}`);
+                if (!existingError) {
+                    fieldset.insertBefore(errorMessageSpan, element.nextSibling); // Insere após o legend
+                }
+            }
+            // Marca o primeiro input de rádio no grupo como inválido para ARIA
+            const firstRadio = fieldset.querySelector('input[type="radio"]');
+            if (firstRadio) {
+                firstRadio.setAttribute('aria-invalid', 'true');
+                firstRadio.setAttribute('aria-describedby', errorId);
+            }
+        } else {
+            element.parentNode.insertBefore(errorMessageSpan, element.nextSibling);
+            element.classList.add('is-invalid'); // Adiciona classe de erro visual ao input
+            element.setAttribute('aria-invalid', 'true'); // Acessibilidade: indica campo inválido
+            element.setAttribute('aria-describedby', errorId); // Associa o erro ao campo
+        }
+    }
+
+
     // --- Funções de Acessibilidade e Tema ---
 
     /**
@@ -141,92 +283,138 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Event Listeners Globais ---
 
+    // Link "Pular para o Conteúdo Principal"
+    if (skipLink && mainContent) {
+        skipLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            mainContent.setAttribute('tabindex', '-1'); // Torna o main focável temporariamente
+            mainContent.focus(); // Foca no conteúdo principal
+            // Remove tabindex depois de focar para evitar problemas de tabbing persistente
+            mainContent.addEventListener('blur', () => {
+                mainContent.removeAttribute('tabindex');
+            }, { once: true });
+        });
+    }
+
     // Menu móvel
-    menuToggle.addEventListener('click', () => {
-        const isExpanded = menuToggle.getAttribute('aria-expanded') === 'true';
-        navLinks.classList.toggle('show');
-        menuToggle.setAttribute('aria-expanded', !isExpanded);
-        navLinks.hidden = !navLinks.hidden; // Alterna o atributo hidden
-    });
+    if (menuToggle && navLinks) {
+        // Inicializa links do menu mobile como não focáveis se o menu estiver fechado
+        if (navLinks.hidden) {
+            navLinks.querySelectorAll('a, button').forEach(el => el.setAttribute('tabindex', '-1'));
+        }
+
+        menuToggle.addEventListener('click', () => {
+            const isExpanded = menuToggle.getAttribute('aria-expanded') === 'true';
+            navLinks.classList.toggle('show');
+            menuToggle.setAttribute('aria-expanded', !isExpanded);
+            navLinks.hidden = !navLinks.hidden; // Alterna o atributo hidden
+
+            // Gerenciamento de foco para acessibilidade do menu móvel
+            const focusableElementsInNav = navLinks.querySelectorAll('a, button'); // Outros elementos focáveis dentro do nav
+            if (!isExpanded) { // Menu está abrindo
+                focusableElementsInNav.forEach(el => el.removeAttribute('tabindex')); // Torna-os focáveis
+                if (focusableElementsInNav.length > 0) {
+                    focusableElementsInNav[0].focus(); // Foca no primeiro item do menu
+                }
+            } else { // Menu está fechando
+                focusableElementsInNav.forEach(el => el.setAttribute('tabindex', '-1')); // Torna-os não focáveis
+                menuToggle.focus(); // Retorna o foco para o botão que abriu/fechou o menu
+            }
+        });
+    }
+
 
     // Botão voltar ao topo
     window.addEventListener('scroll', () => {
         if (window.scrollY > 300) {
-            btnTopo.style.display = 'flex'; // Usar flex para centralizar o ícone
-            btnTopo.style.opacity = '1';
+            document.body.classList.add('scrolled'); // O CSS se encarrega do display
         } else {
-            btnTopo.style.opacity = '0';
-            setTimeout(() => {
-                btnTopo.style.display = 'none';
-            }, 300);
+            document.body.classList.remove('scrolled');
         }
     });
 
-    btnTopo.addEventListener('click', () => {
-        window.scrollTo({
-            top: 0,
-            behavior: 'smooth',
+    if (btnTopo) {
+        btnTopo.addEventListener('click', () => {
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth',
+            });
         });
-    });
+    }
 
     // --- Acessibilidade Menu ---
-    acessibilidadeBtn.addEventListener('click', (event) => {
-        event.stopPropagation();
-        const isHidden = acessibilidadeMenu.hidden;
+    if (acessibilidadeBtn && acessibilidadeMenu) {
+        acessibilidadeBtn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const isHidden = acessibilidadeMenu.hidden;
 
-        acessibilidadeMenu.hidden = !isHidden;
-        acessibilidadeMenu.classList.toggle('acessibilidade-menu-visible', !isHidden);
-        acessibilidadeBtn.setAttribute('aria-expanded', !isHidden);
-    });
+            acessibilidadeMenu.hidden = !isHidden;
+            acessibilidadeMenu.classList.toggle('acessibilidade-menu-visible', !isHidden);
+            acessibilidadeBtn.setAttribute('aria-expanded', !isHidden);
+        });
 
-    // Fechar menu de acessibilidade ao clicar fora
-    document.addEventListener('click', (event) => {
-        if (!acessibilidadeMenu.contains(event.target) && !acessibilidadeBtn.contains(event.target)) {
-            acessibilidadeMenu.hidden = true;
-            acessibilidadeMenu.classList.remove('acessibilidade-menu-visible');
-            acessibilidadeBtn.setAttribute('aria-expanded', 'false');
-        }
-    });
+        // Fechar menu de acessibilidade ao clicar fora
+        document.addEventListener('click', (event) => {
+            if (!acessibilidadeMenu.contains(event.target) && !acessibilidadeBtn.contains(event.target)) {
+                acessibilidadeMenu.hidden = true;
+                acessibilidadeMenu.classList.remove('acessibilidade-menu-visible');
+                acessibilidadeBtn.setAttribute('aria-expanded', 'false');
+            }
+        });
 
-    // Fechar menu de acessibilidade com ESC
-    document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape') {
-            acessibilidadeMenu.hidden = true;
-            acessibilidadeMenu.classList.remove('acessibilidade-menu-visible');
-            acessibilidadeBtn.setAttribute('aria-expanded', 'false');
-        }
-    });
+        // Fechar menu de acessibilidade com ESC
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                acessibilidadeMenu.hidden = true;
+                acessibilidadeMenu.classList.remove('acessibilidade-menu-visible');
+                acessibilidadeBtn.setAttribute('aria-expanded', 'false');
+            }
+        });
+    }
+
 
     // Aumentar fonte
-    btnAumentarFonte.addEventListener('click', () => {
-        currentFontSize += FONT_SIZE_STEP;
-        document.documentElement.style.fontSize = `${currentFontSize}px`;
-        localStorage.setItem('fontSize', currentFontSize);
-    });
+    if (btnAumentarFonte) {
+        btnAumentarFonte.addEventListener('click', () => {
+            currentFontSize += FONT_SIZE_STEP;
+            document.documentElement.style.fontSize = `${currentFontSize}px`;
+            localStorage.setItem('fontSize', currentFontSize);
+        });
+    }
+
 
     // Diminuir fonte
-    btnDiminuirFonte.addEventListener('click', () => {
-        currentFontSize -= FONT_SIZE_STEP;
-        if (currentFontSize < 10) currentFontSize = 10;
-        document.documentElement.style.fontSize = `${currentFontSize}px`;
-        localStorage.setItem('fontSize', currentFontSize);
-    });
+    if (btnDiminuirFonte) {
+        btnDiminuirFonte.addEventListener('click', () => {
+            currentFontSize -= FONT_SIZE_STEP;
+            if (currentFontSize < 10) currentFontSize = 10;
+            document.documentElement.style.fontSize = `${currentFontSize}px`;
+            localStorage.setItem('fontSize', currentFontSize);
+        });
+    }
+
 
     // Alternar tema claro/escuro
-    btnToggleTema.addEventListener('click', () => {
-        document.body.classList.toggle('dark-theme');
-        const isDark = document.body.classList.contains('dark-theme');
-        localStorage.setItem('theme', isDark ? 'dark' : 'light');
-        btnToggleTema.setAttribute('aria-pressed', isDark);
-    });
+    if (btnToggleTema) {
+        btnToggleTema.addEventListener('click', () => {
+            document.body.classList.toggle('dark-theme');
+            const isDark = document.body.classList.contains('dark-theme');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            btnToggleTema.setAttribute('aria-pressed', isDark);
+        });
+    }
+
 
     // Alternar alto contraste
-    btnAltoContraste.addEventListener('click', () => {
-        document.body.classList.toggle('high-contrast');
-        const isHighContrast = document.body.classList.contains('high-contrast');
-        localStorage.setItem('highContrast', isHighContrast);
-        btnAltoContraste.setAttribute('aria-pressed', isHighContrast);
-    });
+    if (btnAltoContraste) {
+        btnAltoContraste.addEventListener('click', () => {
+            document.body.classList.toggle('high-contrast');
+            const isHighContrast = document.body.classList.contains('high-contrast');
+            localStorage.setItem('highContrast', isHighContrast);
+            btnAltoContraste.setAttribute('aria-pressed', isHighContrast);
+        });
+    }
+
 
     // Event listeners para os botões de leitura
     if (btnLerTexto) {
@@ -236,53 +424,94 @@ document.addEventListener('DOMContentLoaded', () => {
         btnPararLeitura.addEventListener('click', stopReading);
     }
 
-    // --- Rolagem Suave para Links de Navegação ---
-    document.querySelectorAll('.nav-links a').forEach(anchor => {
-        anchor.addEventListener('click', function (e) {
-            e.preventDefault();
-            const targetId = this.getAttribute('href');
-            const targetElement = document.querySelector(targetId);
-            if (targetElement) {
-                targetElement.scrollIntoView({
-                    behavior: 'smooth'
-                });
-                // Fechar menu móvel após clicar em um link
-                if (navLinks.classList.contains('show')) {
-                    navLinks.classList.remove('show');
-                    menuToggle.setAttribute('aria-expanded', 'false');
-                    navLinks.hidden = true;
+    // O código para o botão 'explore a conexão' foi removido aqui.
+
+    // --- Sistema de Abas de Seções ---
+    document.querySelectorAll('.nav-links a[href^="#"]').forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault(); // Impede o comportamento padrão do link
+
+            const hash = this.getAttribute('href');
+            const targetSectionId = hash.slice(1); // Pega o ID da seção sem o '#'
+            const targetSection = document.getElementById(targetSectionId);
+
+            // Esconde todas as seções
+            const allSections = document.querySelectorAll('main > section');
+            allSections.forEach(sec => {
+                sec.style.display = 'none';
+                sec.classList.remove('revealed'); // Garante que a animação possa ser re-executada
+                sec.setAttribute('aria-hidden', 'true'); // Esconde de leitores de tela
+            });
+
+            // Mostra apenas a seção alvo (seção clicada)
+            if (targetSection) {
+                targetSection.style.display = ''; // Volta para o display padrão (normalmente 'block' ou 'flex')
+                // Força o reflow para garantir a animação data-reveal
+                void targetSection.offsetWidth;
+                targetSection.classList.add('revealed'); // Adiciona a classe para animar
+                targetSection.removeAttribute('aria-hidden'); // Mostra para leitores de tela
+                targetSection.focus(); // Foca na seção para acessibilidade
+
+                // Se a seção de impacto for mostrada, renderiza o gráfico
+                if (targetSection.id === 'impacto' && !chartRendered) {
+                    renderImpactChart();
+                    chartRendered = true;
                 }
             }
-        });
-    });
 
-    // --- Destaque do Link de Navegação Ativo ---
-    const sections = document.querySelectorAll('main section[id]');
-    const navLinksList = document.querySelectorAll('.nav-links a');
+            // Destaca a aba ativa no menu
+            document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));
+            this.classList.add('active');
 
-    const observerConfig = {
-        root: null,
-        rootMargin: '0px',
-        threshold: 0.3
-    };
+            // Fecha o menu mobile (se aberto)
+            if (navLinks && navLinks.classList.contains('show')) {
+                navLinks.classList.remove('show');
+                menuToggle.setAttribute('aria-expanded', 'false');
+                navLinks.hidden = true;
+                // Gerenciamento de foco ao fechar menu após clique em link
+                navLinks.querySelectorAll('a, button').forEach(el => el.setAttribute('tabindex', '-1'));
+                menuToggle.focus(); // Retorna o foco para o menu toggle
+            }
 
-    const sectionObserver = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                const currentSectionId = entry.target.id;
-                navLinksList.forEach(link => {
-                    link.classList.remove('active');
-                    if (link.getAttribute('href') === `#${currentSectionId}`) {
-                        link.classList.add('active');
-                    }
+            // Rola suavemente para o topo da seção
+            if (targetSection) {
+                targetSection.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start' // Garante que o topo da seção fique visível
                 });
             }
         });
-    }, observerConfig);
-
-    sections.forEach(section => {
-        sectionObserver.observe(section);
     });
+
+    // Função para inicializar o sistema de abas ao carregar a página
+    function initializeTabSystem() {
+        const allSections = document.querySelectorAll('main > section');
+        const firstSection = document.getElementById('introducao'); // Seção inicial a ser mostrada
+
+        // Esconde todas as seções e remove a classe 'revealed'
+        allSections.forEach(sec => {
+            sec.style.display = 'none';
+            sec.classList.remove('revealed');
+            sec.setAttribute('aria-hidden', 'true');
+        });
+
+        // Mostra a primeira seção (hero) por padrão e aplica a animação
+        if (firstSection) {
+            firstSection.style.display = '';
+            firstSection.classList.add('revealed');
+            firstSection.removeAttribute('aria-hidden');
+        }
+
+        // Destaca o primeiro link do menu
+        const firstLink = document.querySelector('.nav-links a[href="#introducao"]'); // Link para a seção de introdução
+        if (firstLink) {
+            document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));
+            firstLink.classList.add('active');
+        }
+    }
+
+    // Chama a inicialização do sistema de abas ao carregar a página
+    initializeTabSystem();
 
 
     // --- Carrossel ---
@@ -296,130 +525,134 @@ document.addEventListener('DOMContentLoaded', () => {
     let autoPlayInterval;
     const AUTO_PLAY_DELAY = 5000; // 5 segundos
 
-    // Cria os indicadores de slide (dots)
-    const carouselDotsContainer = document.createElement('div');
-    carouselDotsContainer.classList.add('carousel-dots');
-    carouselSlides.forEach((_, index) => {
-        const dot = document.createElement('button');
-        dot.classList.add('carousel-dot');
-        dot.setAttribute('aria-label', `Ir para o slide ${index + 1}`);
-        dot.setAttribute('role', 'tab'); // Para acessibilidade
-        dot.setAttribute('aria-controls', `carousel-slide-${index}`); // Para acessibilidade
-        dot.id = `carousel-dot-${index}`; // Para acessibilidade
-        if (index === 0) {
-            dot.classList.add('active');
-            dot.setAttribute('aria-selected', 'true'); // Para acessibilidade
-        } else {
-            dot.setAttribute('aria-selected', 'false'); // Para acessibilidade
-        }
-        dot.addEventListener('click', () => {
-            resetAutoPlay(); // Reseta o auto-play ao clicar no dot
-            moveToSlide(index);
+    if (carouselElement && carouselSlides.length > 0) { // Garante que o carrossel e slides existam
+        // Adiciona loading="lazy" a todas as imagens do carrossel para performance
+        carouselSlides.forEach(slide => {
+            const img = slide.querySelector('img');
+            if (img) {
+                img.setAttribute('loading', 'lazy');
+            }
         });
-        carouselDotsContainer.appendChild(dot);
-    });
-    if (carouselElement) {
+
+        // Cria os indicadores de slide (dots)
+        const carouselDotsContainer = document.createElement('div');
+        carouselDotsContainer.classList.add('carousel-dots');
+        carouselSlides.forEach((_, index) => {
+            const dot = document.createElement('button');
+            dot.classList.add('carousel-dot');
+            dot.setAttribute('aria-label', `Ir para o slide ${index + 1}`);
+            dot.setAttribute('role', 'tab'); // Para acessibilidade
+            dot.setAttribute('aria-controls', `carousel-slide-${index}`); // Para acessibilidade
+            dot.id = `carousel-dot-${index}`; // Para acessibilidade
+            if (index === 0) {
+                dot.classList.add('active');
+                dot.setAttribute('aria-selected', 'true'); // Para acessibilidade
+            } else {
+                dot.setAttribute('aria-selected', 'false'); // Para acessibilidade
+            }
+            dot.addEventListener('click', () => {
+                resetAutoPlay(); // Reseta o auto-play ao clicar no dot
+                moveToSlide(index);
+            });
+            carouselDotsContainer.appendChild(dot);
+        });
         carouselElement.appendChild(carouselDotsContainer);
         // Adiciona role="tablist" e aria-live para o carrossel
         carouselElement.setAttribute('role', 'region');
         carouselElement.setAttribute('aria-label', 'Carrossel de imagens sobre a conexão campo-cidade');
         carouselElement.setAttribute('aria-live', 'polite'); // Anuncia mudanças para leitores de tela
-    }
-    const carouselDots = Array.from(document.querySelectorAll('.carousel-dot'));
 
-    /**
-     * Move o carrossel para um slide específico.
-     * @param {number} targetIndex O índice do slide de destino.
-     */
-    function moveToSlide(targetIndex) {
-        if (targetIndex < 0) {
-            targetIndex = carouselSlides.length - 1;
-        } else if (targetIndex >= carouselSlides.length) {
-            targetIndex = 0;
+        const carouselDots = Array.from(document.querySelectorAll('.carousel-dot'));
+
+        /**
+         * Move o carrossel para um slide específico.
+         * @param {number} targetIndex O índice do slide de destino.
+         */
+        function moveToSlide(targetIndex) {
+            if (targetIndex < 0) {
+                targetIndex = carouselSlides.length - 1;
+            } else if (targetIndex >= carouselSlides.length) {
+                targetIndex = 0;
+            }
+
+            const offset = carouselSlides[targetIndex].offsetLeft;
+            carouselTrack.style.transform = `translateX(-${offset}px)`;
+            currentSlideIndex = targetIndex;
+
+            // Atualiza a classe 'active' e atributos ARIA nos dots
+            carouselDots.forEach((dot, index) => {
+                const isActive = (index === currentSlideIndex);
+                dot.classList.toggle('active', isActive);
+                dot.setAttribute('aria-selected', isActive);
+                dot.setAttribute('tabindex', isActive ? '0' : '-1'); // Torna o dot ativo focável
+            });
+
+            // Atualiza aria-hidden para acessibilidade nos slides
+            carouselSlides.forEach((slide, index) => {
+                const isCurrent = (index === currentSlideIndex);
+                slide.setAttribute('aria-hidden', !isCurrent);
+                slide.setAttribute('id', `carousel-slide-${index}`); // Adiciona ID para aria-controls
+                slide.setAttribute('role', 'tabpanel'); // Para acessibilidade
+                slide.setAttribute('aria-labelledby', `carousel-dot-${index}`); // Associa ao dot
+
+                // Garante que apenas o slide ativo seja focável para leitores de tela
+                const focusableElementsInSlide = slide.querySelectorAll('a, button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+                focusableElementsInSlide.forEach(el => {
+                    if (isCurrent) {
+                        el.removeAttribute('tabindex');
+                    } else {
+                        el.setAttribute('tabindex', '-1');
+                    }
+                });
+            });
         }
 
-        const offset = carouselSlides[targetIndex].offsetLeft;
-        carouselTrack.style.transform = `translateX(-${offset}px)`;
-        currentSlideIndex = targetIndex;
+        /**
+         * Inicia o auto-play do carrossel.
+         */
+        function startAutoPlay() {
+            stopAutoPlay(); // Garante que não há múltiplos intervalos
+            autoPlayInterval = setInterval(() => {
+                moveToSlide(currentSlideIndex + 1);
+            }, AUTO_PLAY_DELAY);
+        }
 
-        // Atualiza a classe 'active' e atributos ARIA nos dots
-        carouselDots.forEach((dot, index) => {
-            const isActive = (index === currentSlideIndex);
-            dot.classList.toggle('active', isActive);
-            dot.setAttribute('aria-selected', isActive);
-            dot.setAttribute('tabindex', isActive ? '0' : '-1'); // Torna o dot ativo focável
-        });
+        /**
+         * Para o auto-play do carrossel.
+         */
+        function stopAutoPlay() {
+            clearInterval(autoPlayInterval);
+        }
 
-        // Atualiza aria-hidden para acessibilidade nos slides
-        carouselSlides.forEach((slide, index) => {
-            const isCurrent = (index === currentSlideIndex);
-            slide.setAttribute('aria-hidden', !isCurrent);
-            slide.setAttribute('id', `carousel-slide-${index}`); // Adiciona ID para aria-controls
-            slide.setAttribute('role', 'tabpanel'); // Para acessibilidade
-            slide.setAttribute('aria-labelledby', `carousel-dot-${index}`); // Associa ao dot
+        /**
+         * Reseta o auto-play (para e reinicia).
+         */
+        function resetAutoPlay() {
+            stopAutoPlay();
+            startAutoPlay();
+        }
 
-            // Garante que apenas o slide ativo seja focável para leitores de tela
-            const focusableElementsInSlide = slide.querySelectorAll('a, button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
-            focusableElementsInSlide.forEach(el => {
-                if (isCurrent) {
-                    el.removeAttribute('tabindex');
-                } else {
-                    el.setAttribute('tabindex', '-1');
-                }
+        // Navegação do carrossel
+        if (prevBtn) {
+            prevBtn.addEventListener('click', () => {
+                resetAutoPlay(); // Reseta o auto-play ao clicar
+                moveToSlide(currentSlideIndex - 1);
             });
-        });
-    }
+        }
+        if (nextBtn) {
+            nextBtn.addEventListener('click', () => {
+                resetAutoPlay(); // Reseta o auto-play ao clicar
+                moveToSlide(currentSlideIndex + 1);
+            });
+        }
 
-    /**
-     * Inicia o auto-play do carrossel.
-     */
-    function startAutoPlay() {
-        stopAutoPlay(); // Garante que não há múltiplos intervalos
-        autoPlayInterval = setInterval(() => {
-            moveToSlide(currentSlideIndex + 1);
-        }, AUTO_PLAY_DELAY);
-    }
-
-    /**
-     * Para o auto-play do carrossel.
-     */
-    function stopAutoPlay() {
-        clearInterval(autoPlayInterval);
-    }
-
-    /**
-     * Reseta o auto-play (para e reinicia).
-     */
-    function resetAutoPlay() {
-        stopAutoPlay();
-        startAutoPlay();
-    }
-
-    // Navegação do carrossel
-    if (prevBtn) {
-        prevBtn.addEventListener('click', () => {
-            resetAutoPlay(); // Reseta o auto-play ao clicar
-            moveToSlide(currentSlideIndex - 1);
-        });
-    }
-    if (nextBtn) {
-        nextBtn.addEventListener('click', () => {
-            resetAutoPlay(); // Reseta o auto-play ao clicar
-            moveToSlide(currentSlideIndex + 1);
-        });
-    }
-
-    // Pausa o auto-play ao passar o mouse ou focar no carrossel
-    if (carouselElement) {
+        // Pausa o auto-play ao passar o mouse ou focar no carrossel
         carouselElement.addEventListener('mouseenter', stopAutoPlay);
         carouselElement.addEventListener('mouseleave', startAutoPlay);
         carouselElement.addEventListener('focusin', stopAutoPlay); // Pausa ao focar em qualquer elemento dentro
         carouselElement.addEventListener('focusout', startAutoPlay); // Reinicia ao sair o foco
-    }
 
-
-    // Inicializa o carrossel
-    if (carouselSlides.length > 0) {
+        // Inicializa o carrossel
         moveToSlide(0);
         startAutoPlay(); // Inicia o auto-play
     }
@@ -491,6 +724,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             for (const [question, correctAnswer] of Object.entries(correctAnswers)) {
                 const userAnswer = formData.get(question);
+                // Usando :has para selecionar o fieldset que contém o input de rádio
                 const fieldset = quizForm.querySelector(`fieldset:has([name="${question}"])`);
                 const legend = fieldset.querySelector('legend');
                 const radioInputs = fieldset.querySelectorAll(`input[name="${question}"]`);
@@ -687,23 +921,23 @@ document.addEventListener('DOMContentLoaded', () => {
             // Validação do Nome
             if (nameInput.value.trim() === '') {
                 isValid = false;
-                showInlineError(nameInput, 'Por favor, insira seu nome.');
+                showInlineError(nameInput, 'Por favor, insira seu nome.', 'name-error');
             }
 
             // Validação do E-mail
             const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (emailInput.value.trim() === '') {
                 isValid = false;
-                showInlineError(emailInput, 'Por favor, insira seu e-mail.');
+                showInlineError(emailInput, 'Por favor, insira seu e-mail.', 'email-error');
             } else if (!emailPattern.test(emailInput.value.trim())) {
                 isValid = false;
-                showInlineError(emailInput, 'Por favor, insira um e-mail válido.');
+                showInlineError(emailInput, 'Por favor, insira um e-mail válido.', 'email-error');
             }
 
             // Validação da Mensagem
             if (messageInput.value.trim().length < 10) {
                 isValid = false;
-                showInlineError(messageInput, 'Sua mensagem deve ter pelo menos 10 caracteres.');
+                showInlineError(messageInput, 'Sua mensagem deve ter pelo menos 10 caracteres.', 'message-error');
             }
 
             if (!isValid) {
@@ -721,7 +955,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 // IMPORTANTE: Em um ambiente de produção, substitua esta linha por uma chamada real para o seu backend (ex: fetch('/api/send-email', { method: 'POST', body: formData }))
                 await new Promise(resolve => setTimeout(resolve, 1500)); // Simula atraso
-                
+
                 displayModal('Mensagem enviada com sucesso! Agradecemos seu contato.', 'success', 3000); // Fecha automaticamente após 3 segundos
                 contactForm.reset(); // Limpa o formulário apenas em caso de sucesso
             } catch (error) {
@@ -731,47 +965,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 setLoadingState(false); // Esconde spinner e reabilita botão (sempre, no final da operação)
             }
         });
-
-        /**
-         * Exibe uma mensagem de erro abaixo do campo do formulário.
-         * @param {HTMLElement} element O elemento de input/textarea ou legend para grupos de rádio.
-         * @param {string} message A mensagem de erro a ser exibida.
-         * @param {string} [errorId] Opcional. ID para a mensagem de erro (usado para quiz).
-         */
-        function showInlineError(element, message, errorId = `${element.id}-error`) {
-            const errorMessageSpan = document.createElement('span');
-            errorMessageSpan.classList.add('error-message');
-            errorMessageSpan.textContent = message;
-            errorMessageSpan.id = errorId; // Define o ID para aria-describedby
-
-            // Para inputs de rádio, a mensagem de erro deve ir após o fieldset ou legend
-            if (element.type === 'radio' || element.tagName === 'LEGEND') {
-                const fieldset = element.closest('fieldset');
-                if (fieldset) {
-                    // Verifica se uma mensagem de erro para este fieldset já existe
-                    const existingError = fieldset.querySelector(`#${errorId}`);
-                    if (!existingError) {
-                        fieldset.insertBefore(errorMessageSpan, element.nextSibling); // Insere após o legend
-                    }
-                }
-                // Marca o primeiro input de rádio no grupo como inválido para ARIA
-                const firstRadio = fieldset.querySelector('input[type="radio"]');
-                if (firstRadio) {
-                    firstRadio.setAttribute('aria-invalid', 'true');
-                    firstRadio.setAttribute('aria-describedby', errorId);
-                }
-            } else {
-                element.parentNode.insertBefore(errorMessageSpan, element.nextSibling);
-                element.classList.add('is-invalid'); // Adiciona classe de erro visual ao input
-                element.setAttribute('aria-invalid', 'true'); // Acessibilidade: indica campo inválido
-                element.setAttribute('aria-describedby', errorId); // Associa o erro ao campo
-            }
-        }
     }
 
     // --- Animações de Revelação (data-reveal) ---
+    // Este observer é agora principalmente para o efeito 'revealed' e para renderizar o gráfico na seção 'impacto'
     const revealElements = document.querySelectorAll('[data-reveal]');
-    let chartRendered = false;
+    let chartRendered = false; // Flag para garantir que o gráfico seja renderizado apenas uma vez
 
     const observerOptions = {
         root: null,
@@ -784,11 +983,21 @@ document.addEventListener('DOMContentLoaded', () => {
             if (entry.isIntersecting) {
                 entry.target.classList.add('revealed');
 
+                // Renderiza o gráfico apenas quando a seção 'impacto' é revelada e ainda não foi renderizado
                 if (entry.target.id === 'impacto' && !chartRendered) {
                     renderImpactChart();
-                    chartRendered = true;
+                    chartRendered = true; // Define a flag para true
                 }
-                observer.unobserve(entry.target);
+                // Continua observando para que a animação possa ser re-executada se a seção for escondida/mostrada
+                // observer.unobserve(entry.target); // Não desobservar se quiser re-animar ou re-renderizar o gráfico
+            } else {
+                // Remove a classe 'revealed' quando a seção não está mais visível,
+                // permitindo que a animação seja acionada novamente se a seção reaparecer
+                entry.target.classList.remove('revealed');
+                // Reset chartRendered if 'impacto' section is no longer visible
+                if (entry.target.id === 'impacto') {
+                    chartRendered = false; // Permite re-renderizar o gráfico se a seção for novamente visível
+                }
             }
         });
     }, observerOptions);
@@ -798,7 +1007,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- Gráfico da Seção Impacto (Chart.js) ---
-    let impactChartInstance = null;
+    let impactChartInstance = null; // Para armazenar a instância do gráfico e destruí-la se necessário
 
     /**
      * Renderiza o gráfico de impacto na seção correspondente.
@@ -807,6 +1016,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const ctx = document.getElementById('impactChart');
 
         if (ctx && typeof Chart !== 'undefined') {
+            // Destrói a instância anterior do gráfico se existir
             if (impactChartInstance) {
                 impactChartInstance.destroy();
             }
@@ -819,11 +1029,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         label: 'Fluxo Campo-Cidade (Importância Relativa)',
                         data: [80, 65, 75, 50, 70],
                         backgroundColor: [
-                            'rgba(44, 122, 44, 0.8)',
-                            'rgba(70, 130, 180, 0.8)',
-                            'rgba(255, 165, 0, 0.8)',
-                            'rgba(138, 43, 226, 0.8)',
-                            'rgba(255, 215, 0, 0.8)'
+                            'rgba(44, 122, 44, 0.8)', // Verde escuro
+                            'rgba(70, 130, 180, 0.8)', // Azul aço
+                            'rgba(255, 165, 0, 0.8)', // Laranja
+                            'rgba(138, 43, 226, 0.8)', // Azul violeta
+                            'rgba(255, 215, 0, 0.8)' // Ouro
                         ],
                         borderColor: [
                             'rgba(44, 122, 44, 1)',
@@ -837,7 +1047,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false,
+                    maintainAspectRatio: false, // Permite que o gráfico não mantenha a proporção original
                     plugins: {
                         title: {
                             display: true,
@@ -846,10 +1056,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                 size: 18,
                                 family: 'Playfair Display'
                             },
-                            color: '#2c7a2c'
+                            color: '#2c7a2c' // Cor do título do gráfico
                         },
                         legend: {
-                            display: false
+                            display: false // Não exibir a legenda do dataset
                         }
                     },
                     scales: {
@@ -861,7 +1071,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 font: {
                                     size: 14
                                 },
-                                color: '#333'
+                                color: '#333' // Cor do texto do eixo Y
                             }
                         },
                         x: {
@@ -871,7 +1081,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 font: {
                                     size: 14
                                 },
-                                color: '#333'
+                                color: '#333' // Cor do texto do eixo X
                             }
                         }
                     }
@@ -880,95 +1090,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             console.warn('Canvas para o gráfico não encontrado ou Chart.js não carregado.');
         }
-    }
-
-    // --- Função para exibir modal customizado (substituindo alerts) ---
-    /**
-     * Exibe um modal customizado com uma mensagem e um tipo (sucesso, erro, info).
-     * @param {string} message A mensagem a ser exibida no modal.
-     * @param {string} type O tipo de mensagem ('success', 'error', 'info').
-     * @param {number} [autoCloseDelay=0] Opcional. Atraso em milissegundos para fechar o modal automaticamente. 0 para não fechar automaticamente.
-     */
-    function displayModal(message, type = 'info', autoCloseDelay = 0) {
-        let modal = document.getElementById('custom-modal');
-        let modalMessage = document.getElementById('modal-message');
-        let modalIcon = modal.querySelector('.modal-icon');
-        let closeButton = modal.querySelector('button');
-
-        modalMessage.textContent = message;
-        modal.setAttribute('data-type', type); // Define o tipo para CSS
-
-        // Define o ícone com base no tipo
-        modalIcon.className = 'modal-icon fas'; // Reseta e adiciona classes base
-        if (type === 'success') {
-            modalIcon.classList.add('fa-check-circle');
-            modalIcon.setAttribute('aria-hidden', 'true'); // Oculta para leitores de tela se o texto já descreve
-        } else if (type === 'error') {
-            modalIcon.classList.add('fa-times-circle');
-            modalIcon.setAttribute('aria-hidden', 'true');
-        } else if (type === 'info') {
-            modalIcon.classList.add('fa-info-circle');
-            modalIcon.setAttribute('aria-hidden', 'true');
-        }
-
-        modal.style.opacity = '1';
-        modal.style.visibility = 'visible';
-        modal.setAttribute('aria-modal', 'true'); // Indica que é um modal
-        modal.setAttribute('role', 'dialog'); // Define o papel como diálogo
-        modal.setAttribute('aria-labelledby', 'modal-message'); // Associa ao título da mensagem
-
-        // Garante que o foco seja travado dentro do modal
-        const focusableElements = modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
-        const firstFocusableElement = focusableElements[0];
-        const lastFocusableElement = focusableElements[focusableElements.length - 1];
-
-        // Foca no botão de fechar por padrão
-        closeButton.focus();
-
-        function trapFocus(e) {
-            if (e.key === 'Tab') {
-                if (e.shiftKey) { // Se Shift + Tab
-                    if (document.activeElement === firstFocusableElement) {
-                        lastFocusableElement.focus();
-                        e.preventDefault();
-                    }
-                } else { // Se Tab
-                    if (document.activeElement === lastFocusableElement) {
-                        firstFocusableElement.focus();
-                        e.preventDefault();
-                    }
-                }
-            }
-            if (e.key === 'Escape') {
-                closeModal();
-            }
-        }
-
-        modal.addEventListener('keydown', trapFocus);
-
-        let autoCloseTimeout;
-        if (autoCloseDelay > 0) {
-            autoCloseTimeout = setTimeout(closeModal, autoCloseDelay);
-        }
-
-        function closeModal() {
-            modal.style.opacity = '0';
-            modal.style.visibility = 'hidden';
-            modal.removeAttribute('data-type');
-            modal.removeAttribute('aria-modal');
-            modal.removeAttribute('role');
-            modal.removeAttribute('aria-labelledby');
-            modal.removeEventListener('keydown', trapFocus); // Remove o event listener
-            // Remove o ícone ao fechar
-            if (modalIcon) {
-                modalIcon.className = 'modal-icon'; // Reseta as classes do ícone
-            }
-            if (autoCloseTimeout) {
-                clearTimeout(autoCloseTimeout); // Limpa o timeout de auto-fechamento se fechado manualmente
-            }
-        }
-
-        closeButton.addEventListener('click', closeModal);
     }
 
     // --- Ano Dinâmico no Rodapé ---
@@ -983,7 +1104,7 @@ document.addEventListener('DOMContentLoaded', () => {
     collapsibleSections.forEach(section => {
         // Encontra o primeiro parágrafo dentro da seção que não é um placeholder de gráfico
         const mainContentElement = section.querySelector('p:not(.placeholder-text)');
-        if (!mainContentElement) return;
+        if (!mainContentElement) return; // Se não houver parágrafo, não faz nada
 
         const originalText = mainContentElement.textContent;
         const words = originalText.split(' ');
@@ -1001,14 +1122,15 @@ document.addEventListener('DOMContentLoaded', () => {
             readMoreButton.classList.add('btn-read-more');
             readMoreButton.textContent = 'Leia Mais';
             readMoreButton.setAttribute('aria-expanded', 'false');
-            readMoreButton.setAttribute('aria-controls', `content-${section.id}`); // Associa ao conteúdo expandível
+            // Usar um ID único para cada conteúdo expansível para aria-controls
+            const contentId = `content-expand-${section.id || Math.random().toString(36).substr(2, 9)}`;
+            hiddenContentSpan.id = contentId;
+            readMoreButton.setAttribute('aria-controls', contentId);
 
-            mainContentElement.textContent = visibleText;
-            mainContentElement.appendChild(hiddenContentSpan);
+            mainContentElement.textContent = visibleText; // Define o texto inicial truncado
+            mainContentElement.appendChild(hiddenContentSpan); // Adiciona o span com o restante do texto
+            // Insere o botão de "Leia Mais" após o parágrafo principal
             mainContentElement.parentNode.insertBefore(readMoreButton, mainContentElement.nextSibling);
-
-            // Adiciona um ID ao conteúdo que será expandido/contraído para aria-controls
-            mainContentElement.id = `content-${section.id}`;
 
 
             readMoreButton.addEventListener('click', () => {
@@ -1018,8 +1140,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 readMoreButton.setAttribute('aria-expanded', !isExpanded);
 
                 if (!isExpanded) {
-                    // Rola suavemente para o início da seção quando expande
-                    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    // Rola suavemente para o início do parágrafo quando expande
+                    mainContentElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
             });
         }
