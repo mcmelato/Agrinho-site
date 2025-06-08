@@ -1127,16 +1127,9 @@ document.addEventListener('DOMContentLoaded', () => {
             hiddenContentSpan.id = contentId;
             readMoreButton.setAttribute('aria-controls', contentId);
 
-            mainContentElement.textContent = visibleText; // Define o texto inicial truncado
-            mainContentElement.appendChild(hiddenContentSpan); // Adiciona o span com o restante do texto
-            // Insere o botão de "Leia Mais" após o parágrafo principal
-            mainContentElement.parentNode.insertBefore(readMoreButton, mainContentElement.nextSibling);
-
-
             readMoreButton.addEventListener('click', () => {
                 const isExpanded = readMoreButton.getAttribute('aria-expanded') === 'true';
-                hiddenContentSpan.classList.toggle('visible', !isExpanded);
-                readMoreButton.textContent = isExpanded ? 'Leia Mais' : 'Mostrar Menos';
+                hiddenContentSpan.classList.toggle('visible', !isExpanded);s
                 readMoreButton.setAttribute('aria-expanded', !isExpanded);
 
                 if (!isExpanded) {
