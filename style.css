@@ -555,9 +555,12 @@ header {
     margin-top: 1.5rem;
 }
 
+.impact-content li {
+text-align: left;
+}
+
 .impact-content p {
     flex: 1 1 40%;
-    min-width: 300px; /* Garante que o texto não fique muito estreito */
 }
 
 .interactive-placeholder {
